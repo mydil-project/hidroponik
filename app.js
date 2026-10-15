@@ -1,34 +1,34 @@
 /* ==========================================================
    Kontrol Pompa Hydroponik - Firebase Realtime Database
+   Jadwal otomatis bersifat permanen (diatur di firmware ESP32).
+   Web: lihat status, pilih mode, nyalakan/matikan manual.
+   Ubah mode hanya untuk user Google yang UID-nya terdaftar
+   di database (/izin/<UID> = true).
+
    Struktur data:
-     /konfigurasi                 <- ditulis file ini
-     /perangkat/<DEVICE_ID>       <- ditulis ESP32
+     /konfigurasi/{mode, manual}     <- ditulis file ini
+     /perangkat/<DEVICE_ID>          <- ditulis ESP32
    ========================================================== */
 (function () {
   "use strict";
 
-  var SLOT_MAX = 6;
-  var DEVICE_ID = (window.DEVICE_ID || "pompa-1");
-  var KONFIGURASI_AWAL = {
-    mode: "auto",
-    manual: false,
-    durasiMenit: 5,
-    jadwal: [
-      { aktif: true, jam: 21, menit: 0 },
-      { aktif: true, jam: 0, menit: 0 },
-      { aktif: true, jam: 3, menit: 0 },
-      { aktif: false, jam: 12, menit: 0 },
-      { aktif: false, jam: 12, menit: 0 },
-      { aktif: false, jam: 12, menit: 0 }
-    ]
-  };
+  var DEVICE_ID = window.DEVICE_ID || "pompa-1";
+  var TIMEOUT_PERINTAH_MS = 6000;
 
-  var konfigurasi = null;
+  // cadangan tampil, selalu mengikuti firmware
+  var JADWAL_CADANGAN = [
+    { nama: "siang", judul: "Waktu 1 - Siang", mulai: "06:00", sampai: "18:00", durasiMenit: 5, intervalMenit: 15 },
+    { nama: "malam", judul: "Waktu 2 - Malam", mulai: "21:00", sampai: "03:00", durasiMenit: 5, intervalMenit: 180 }
+  ];
+
+  var mode = "auto";
   var perangkat = null;
+  var perintahTertunda = null;
+  var bolehKontrol = false;
+  var auth = null;
   var refKonfigurasi = null;
   var refPerangkat = null;
   var toastTimer = null;
-
   var el = {};
 
   /* ---------------------------------------------------------
@@ -36,8 +36,9 @@
      --------------------------------------------------------- */
   function init() {
     cacheElemen();
+    tampilkanJadwal(JADWAL_CADANGAN);
 
-    if (!window.firebase || typeof firebase === "undefined") {
+    if (typeof firebase === "undefined") {
       fatal("SDK Firebase gagal dimuat. Cek koneksi internet.");
       return;
     }
@@ -49,102 +50,95 @@
 
     try {
       if (!firebase.apps.length) firebase.initializeApp(cfg);
-      var db = firebase.database();
-      refKonfigurasi = db.ref("konfigurasi");
-      refPerangkat = db.ref("perangkat/" + DEVICE_ID);
+      refKonfigurasi = firebase.database().ref("konfigurasi");
+      refPerangkat = firebase.database().ref("perangkat/" + DEVICE_ID);
     } catch (e) {
       fatal("Inisialisasi Firebase gagal: " + e.message);
       return;
     }
 
-    bangunBarisJadwal();
     pasangEvent();
+    pasangAuth();
     dengarkanPerangkat();
 
     refKonfigurasi.on("value", function (snap) {
-      var nilai = snap.val();
-      if (!nilai) {
-        refKonfigurasi.set(KONFIGURASI_AWAL);
-        return;
-      }
-      konfigurasi = normalisasi(nilai);
+      var v = snap.val() || {};
+      mode = v.mode === "manual" ? "manual" : "auto";
       renderKontrol();
-      renderJadwal();
     }, function (err) {
       fatal("Akses database ditolak: " + err.message);
     });
 
     setInterval(kurangiSisa, 1000);
+    setInterval(cekPerintahTertunda, 500);
   }
 
   /* ---------------------------------------------------------
-     Data
+     Tampilan jadwal (read-only, dari laporan ESP32)
      --------------------------------------------------------- */
-  function normalisasi(v) {
-    var jadwal = [];
-    var sumber = Array.isArray(v.jadwal) ? v.jadwal : [];
-    for (var i = 0; i < SLOT_MAX; i++) {
-      var s = sumber[i] || {};
-      jadwal.push({
-        aktif: !!s.aktif,
-        jam: clamp(parseInt(s.jam, 10) || 0, 0, 23),
-        menit: clamp(parseInt(s.menit, 10) || 0, 0, 59)
-      });
-    }
-    return {
-      mode: v.mode === "manual" ? "manual" : "auto",
-      manual: !!v.manual,
-      durasiMenit: clamp(parseInt(v.durasiMenit, 10) || KONFIGURASI_AWAL.durasiMenit, 1, 240),
-      jadwal: jadwal
-    };
+  function tampilkanJadwal(data) {
+    el.jadwalList.innerHTML = "";
+    data.forEach(function (s) {
+      var jadwal = s.sampai
+        ? s.mulai + " - " + s.sampai + " \u00b7 " + s.durasiMenit + " mnt tiap " +
+        s.intervalMenit + " mnt"
+        : s.mulai + " \u00b7 " + s.durasiMenit + " menit";
+      var item = document.createElement("div");
+      item.className = "waktu";
+      item.innerHTML =
+        '<div class="waktu-head">' +
+        '<span class="waktu-title"></span>' +
+        '<span class="waktu-summary"></span>' +
+        '</div>';
+      item.querySelector(".waktu-title").textContent = s.judul || s.nama;
+      item.querySelector(".waktu-summary").textContent = jadwal;
+      el.jadwalList.appendChild(item);
+    });
   }
 
   /* ---------------------------------------------------------
-     Render
+     Status pompa
      --------------------------------------------------------- */
-  function bangunBarisJadwal() {
-    var tbody = el.jadwalBody;
-    tbody.innerHTML = "";
-    for (var i = 0; i < SLOT_MAX; i++) {
-      var tr = document.createElement("tr");
-      tr.innerHTML =
-        '<td class="slot-label"></td>' +
-        '<td><input type="checkbox" class="slot-aktif"></td>' +
-        '<td><input type="number" class="slot-jam" min="0" max="23" step="1"></td>' +
-        '<td><input type="number" class="slot-menit" min="0" max="59" step="5"></td>';
-      tbody.appendChild(tr);
-    }
-  }
-
   function renderKontrol() {
-    var mode = konfigurasi.mode;
+    var manual = mode === "manual";
     Array.prototype.forEach.call(el.modeBtns, function (btn) {
       btn.classList.toggle("active", btn.dataset.mode === mode);
+      btn.disabled = !bolehKontrol;
     });
+    el.relayBtn.disabled = !bolehKontrol || !manual;
+    el.relayBtn.title = !bolehKontrol
+      ? "Masuk dengan Google untuk mengendalikan pompa"
+      : manual
+        ? "Klik untuk menyalakan / mematikan pompa"
+        : "Pompa berjalan mengikuti jadwal.";
 
-    var manual = mode === "manual";
-    el.relayBtn.disabled = !manual;
-    el.relayBtn.title = manual ? "Klik untuk menyalakan / mematikan pompa"
-      : "Pompa dikontrol oleh jadwal. Pilih mode Manual untuk kendali langsung.";
+    // auto: kartu jadwal; manual: kartu tombol pompa (posisi sama)
+    el.autoCard.hidden = manual;
+    el.manualCard.hidden = !manual;
 
-    var hidup = !!perangkat && !!perangkat.status;
-    el.relayBtn.classList.toggle("on", hidup);
-    el.relayBtn.setAttribute("aria-pressed", hidup ? "true" : "false");
-    el.relayText.textContent = hidup ? "MENYALAKAN" : "MEMATIKAN";
-    el.relayIcon.textContent = hidup ? "\u26a1" : "\u23fb";
+    var nyata = !!(perangkat && perangkat.status);
+    var tampil = perintahTertunda ? perintahTertunda.hidup : nyata;
 
-    if (manual) {
-      el.relaySource.textContent = hidup ? "menyala sesuai perintah manual"
+    el.relayBtn.classList.toggle("on", tampil);
+    el.relayBtn.classList.toggle("pending", !!perintahTertunda);
+    el.relayBtn.setAttribute("aria-pressed", tampil ? "true" : "false");
+    el.relayText.textContent = tampil ? "MENYALAKAN" : "MEMATIKAN";
+    el.relayIcon.textContent = tampil ? "\u26a1" : "\u23fb";
+
+    if (perintahTertunda) {
+      el.relaySource.textContent = "menunggu konfirmasi perangkat...";
+    } else if (manual) {
+      el.relaySource.textContent = nyata ? "menyala sesuai perintah manual"
         : "mati, klik untuk menyalakan";
     } else {
-      el.relaySource.textContent = hidup ? "menyala oleh jadwal otomatis"
+      el.relaySource.textContent = nyata ? "menyala oleh jadwal otomatis"
         : "mati, menunggu jadwal";
     }
   }
 
   function renderPerangkat() {
     var d = perangkat;
-    var online = !!d && !!d.lastSeen && (Date.now() / 1000 - d.lastSeen) < 30;
+    var online = !!d && !!d.lastSeen && Date.now() / 1000 - d.lastSeen < 45;
 
     el.badge.classList.toggle("online", online);
     el.badge.classList.toggle("offline", !online);
@@ -157,30 +151,39 @@
     el.rssi.textContent = d && typeof d.rssi === "number" ? d.rssi + " dBm" : "\u2013";
     el.ip.textContent = (d && d.ip) || "\u2013";
 
+    if (perintahTertunda && !!d && d.status === perintahTertunda.hidup) {
+      perintahTertunda = null;
+    }
+
     renderKontrol();
     renderSisa();
-  }
 
-  function renderJadwal() {
-    var rows = el.jadwalBody.querySelectorAll("tr");
-    konfigurasi.jadwal.forEach(function (slot, i) {
-      var tr = rows[i];
-      if (!tr) return;
-      tr.classList.toggle("off", !slot.aktif);
-      tr.querySelector(".slot-label").textContent = "S" + (i + 1);
-      tr.querySelector(".slot-aktif").checked = slot.aktif;
-      tr.querySelector(".slot-jam").value = slot.jam;
-      tr.querySelector(".slot-menit").value = slot.menit;
-    });
-    el.durasi.value = konfigurasi.durasiMenit;
+    if (d && Array.isArray(d.jadwal) && d.jadwal.length) {
+      tampilkanJadwal(d.jadwal.map(function (s) {
+        return {
+          nama: s.nama,
+          judul: s.nama === "siang" ? "Waktu 1 - Siang" : "Waktu 2 - Malam",
+          mulai: s.mulai,
+          sampai: s.sampai,
+          durasiMenit: s.durasiMenit,
+          intervalMenit: s.intervalMenit
+        };
+      }));
+    }
   }
 
   function renderSisa() {
-    if (!perangkat || !perangkat.status || typeof perangkat.sisaDetik !== "number") {
+    var d = perangkat;
+    if (!d || !d.status) {
       el.sisa.textContent = "\u2013";
       return;
     }
-    el.sisa.textContent = formatDurasi(perangkat.sisaDetik);
+    if (typeof d.sisaDetik === "number") {
+      var nama = d.namaWaktu === "siang" ? "Waktu 1 (siang)" : "Waktu 2 (malam)";
+      el.sisa.textContent = formatDurasi(d.sisaDetik) + " (" + nama + ")";
+      return;
+    }
+    el.sisa.textContent = (d.sumber === "manual") ? "tanpa batas waktu" : "tidak dijadwalkan";
   }
 
   function kurangiSisa() {
@@ -191,74 +194,103 @@
     }
   }
 
+  function cekPerintahTertunda() {
+    if (!perintahTertunda) return;
+    if (Date.now() - perintahTertunda.sejak < TIMEOUT_PERINTAH_MS) return;
+    perintahTertunda = null;
+    toast("Perangkat belum merespons. Periksa status online.", "err");
+    renderKontrol();
+  }
+
   /* ---------------------------------------------------------
-     Aksi
+     Aksi (hanya mode & tombol pompa)
      --------------------------------------------------------- */
   function pasangEvent() {
     Array.prototype.forEach.call(el.modeBtns, function (btn) {
       btn.addEventListener("click", function () {
-        if (!konfigurasi) return;
-        var mode = btn.dataset.mode;
-        if (konfigurasi.mode === mode) return;
-        simpan({ mode: mode }, "Mode diubah ke " + mode);
+        if (!bolehKontrol) return;
+        var baru = btn.dataset.mode;
+        if (baru === mode) return;
+        simpan({ mode: baru }, "Mode diubah ke " + (baru === "auto" ? "otomatis" : "manual"));
       });
     });
 
     el.relayBtn.addEventListener("click", function () {
-      if (!konfigurasi || konfigurasi.mode !== "manual") return;
-      var nyalakan = !(perangkat && perangkat.status);
-      simpan({ manual: nyalakan, mode: "manual" },
-        nyalakan ? "Perintah: nyalakan pompa" : "Perintah: matikan pompa");
+      if (!bolehKontrol || mode !== "manual") return;
+      var nyata = !!(perangkat && perangkat.status);
+      var hidup = !(perintahTertunda ? perintahTertunda.hidup : nyata);
+      perintahTertunda = { hidup: hidup, sejak: Date.now() };
+      renderKontrol();
+      simpan({ manual: hidup, mode: "manual" },
+        hidup ? "Perintah: nyalakan pompa" : "Perintah: matikan pompa");
     });
-
-    el.saveBtn.addEventListener("click", simpanJadwal);
-
-    el.defaultBtn.addEventListener("click", function () {
-      if (!confirm("Ganti jadwal ke konfigurasi bawaan (21:00, 00:00, 03:00)?")) return;
-      simpan({ jadwal: KONFIGURASI_AWAL.jadwal, durasiMenit: KONFIGURASI_AWAL.durasiMenit },
-        "Jadwal dikembalikan ke bawaan");
-    });
-
-    el.jadwalBody.addEventListener("input", tandaiBelumTersimpan);
-    el.durasi.addEventListener("input", tandaiBelumTersimpan);
   }
 
-  function simpanJadwal() {
-    if (!konfigurasi) return;
-    var jadwal = [];
-    var inputs = el.jadwalBody.querySelectorAll("tr");
-    for (var i = 0; i < SLOT_MAX; i++) {
-      var tr = inputs[i];
-      jadwal.push({
-        aktif: tr.querySelector(".slot-aktif").checked,
-        jam: clamp(parseInt(tr.querySelector(".slot-jam").value, 10) || 0, 0, 23),
-        menit: clamp(parseInt(tr.querySelector(".slot-menit").value, 10) || 0, 0, 59)
+  /* ---------------------------------------------------------
+     Login Google + daftar user yang diizinkan
+     --------------------------------------------------------- */
+  function pasangAuth() {
+    auth = firebase.auth();
+
+    el.loginBtn.addEventListener("click", function () {
+      var provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      auth.signInWithPopup(provider).catch(function (err) {
+        if (err && err.code !== "auth/popup-closed-by-user") {
+          toast("Login gagal: " + err.message, "err");
+        }
       });
-    }
-    var durasi = clamp(parseInt(el.durasi.value, 10) || KONFIGURASI_AWAL.durasiMenit, 1, 240);
-    simpan({ jadwal: jadwal, durasiMenit: durasi }, "Jadwal disimpan");
+    });
+
+    el.logoutBtn.addEventListener("click", function () {
+      auth.signOut();
+    });
+
+    auth.onAuthStateChanged(function (user) {
+
+      if (!user) {
+        bolehKontrol = false;
+        tampilkanPengguna(null);
+        renderKontrol();
+        return;
+      }
+
+      // satu-satunya sumber kebenaran: /izin/<UID> di database
+      firebase.database().ref("izin/" + user.uid).once("value")
+        .then(function (snap) {
+          bolehKontrol = snap.val() === true;
+          tampilkanPengguna(user);
+          renderKontrol();
+          if (bolehKontrol) {
+            toast("Selamat datang, " + (user.displayName || "user"), "ok");
+          } else {
+            toast("Akun ini belum terdaftar. UID: " + user.uid, "err");
+          }
+        })
+        .catch(function (err) {
+          bolehKontrol = false;
+          tampilkanPengguna(user);
+          renderKontrol();
+          toast("Cek izin gagal: " + err.message, "err");
+        });
+    });
+  }
+
+  function tampilkanPengguna(user) {
+    el.loginBtn.hidden = !!user;
+    el.userBox.hidden = !user;
+    if (!user) return;
+    el.userName.textContent = user.displayName || user.email || "Pengguna";
+    el.userPhoto.src = user.photoURL || "";
+    el.userPhoto.hidden = !user.photoURL;
   }
 
   function simpan(data, pesan) {
-    el.saveBtn.disabled = true;
     refKonfigurasi.update(data).then(function () {
-      tandaiTersimpan();
       toast(pesan, "ok");
     }).catch(function (err) {
       toast("Gagal menyimpan: " + err.message, "err");
-    }).then(function () {
-      el.saveBtn.disabled = false;
     });
-  }
-
-  function tandaiBelumTersimpan() {
-    el.dirtyHint.textContent = "belum disimpan \u2014 tekan Simpan jadwal";
-    el.dirtyHint.classList.add("dirty");
-  }
-
-  function tandaiTersimpan() {
-    el.dirtyHint.textContent = "tersimpan";
-    el.dirtyHint.classList.remove("dirty");
   }
 
   function dengarkanPerangkat() {
@@ -271,31 +303,21 @@
   }
 
   /* ---------------------------------------------------------
-     Bantuan tampilan
+     Bantuan
      --------------------------------------------------------- */
   function waktuLokal(epochDetik) {
-    try {
-      return new Date(epochDetik * 1000).toLocaleString("id-ID");
-    } catch (e) {
-      return epochDetik;
-    }
+    return new Date(epochDetik * 1000).toLocaleString("id-ID");
   }
 
   function formatDurasi(detik) {
     if (detik <= 0) return "0 detik";
-    var m = Math.floor(detik / 60);
-    var s = detik % 60;
-    return m + " menit " + s + " detik";
-  }
-
-  function clamp(n, min, max) {
-    return Math.min(max, Math.max(min, n));
+    return Math.floor(detik / 60) + " menit " + (detik % 60) + " detik";
   }
 
   function toast(pesan, tipe) {
     clearTimeout(toastTimer);
     el.toast.textContent = pesan;
-    el.toast.className = "toast show " + (tipe || "");
+    el.toast.className = "toast show " + tipe;
     toastTimer = setTimeout(function () {
       el.toast.className = "toast";
     }, 3000);
@@ -305,16 +327,15 @@
     el.deviceMeta.textContent = pesan;
     el.badge.classList.add("offline");
     el.badgeText.textContent = "Konfigurasi belum lengkap";
-    el.relayBtn.disabled = true;
-    el.saveBtn.disabled = true;
+    el.autoCard.hidden = false;
+    el.manualCard.hidden = true;
     toast(pesan, "err");
   }
 
   function cacheElemen() {
-    el.jadwalBody = document.getElementById("jadwalBody");
-    el.durasi = document.getElementById("durasi");
-    el.saveBtn = document.getElementById("saveBtn");
-    el.defaultBtn = document.getElementById("defaultBtn");
+    el.jadwalList = document.getElementById("jadwalList");
+    el.autoCard = document.getElementById("autoCard");
+    el.manualCard = document.getElementById("manualCard");
     el.relayBtn = document.getElementById("relayBtn");
     el.relayText = document.getElementById("relayText");
     el.relayIcon = document.getElementById("relayIcon");
@@ -326,9 +347,13 @@
     el.rssi = document.getElementById("rssi");
     el.ip = document.getElementById("ip");
     el.sisa = document.getElementById("sisa");
-    el.dirtyHint = document.getElementById("dirtyHint");
     el.toast = document.getElementById("toast");
     el.modeBtns = document.querySelectorAll(".mode-btn");
+    el.loginBtn = document.getElementById("loginBtn");
+    el.logoutBtn = document.getElementById("logoutBtn");
+    el.userBox = document.getElementById("userBox");
+    el.userName = document.getElementById("userName");
+    el.userPhoto = document.getElementById("userPhoto");
   }
 
   if (document.readyState === "loading") {

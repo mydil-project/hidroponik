@@ -15,3 +15,13 @@ window.FIREBASE_CONFIG = {
 
 /* Nama perangkat di Firebase (/perangkat/<id>) */
 window.DEVICE_ID = "pompa-1";
+
+/* ==========================================================
+   Daftar user yang boleh mengubah mode pompa TIDAK ada di file ini.
+   Disimpan di database: /izin/<UID> = true
+   (Firebase Console > Realtime Database > klik ikon tambah di /izin)
+
+   Cara mendaftarkan user:
+   1. User login di web, UID-nya muncul di notifikasi "belum terdaftar".
+   2. Buka Realtime Database > /izin > klik ikon "+" > nama node = UID > nilai true.
+   ========================================================== */

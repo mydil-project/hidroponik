@@ -10,96 +10,99 @@
 
 <body>
   <header class="topbar">
-    <div>
-      <h1>Kontrol Pompa Hydroponik</h1>
-      <p class="sub" id="deviceMeta">ESP32 &middot; memuat konfigurasi...</p>
-    </div>
-    <div class="badge" id="statusBadge">
-      <span class="dot"></span>
-      <span id="statusBadgeText">Menghubungkan...</span>
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">&#9673;</span>
+        <div class="brand-text">
+          <h1>Kontrol Pompa Hydroponik</h1>
+          <p class="sub" id="deviceMeta">ESP32 &middot; memuat konfigurasi...</p>
+        </div>
+      </div>
+      <div class="badge" id="statusBadge">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="statusBadgeText">Menghubungkan...</span>
+      </div>
+      <div class="auth">
+        <button type="button" class="btn-chip" id="loginBtn">Masuk dengan Google</button>
+        <div class="user" id="userBox" hidden>
+          <img class="avatar" id="userPhoto" alt="" referrerpolicy="no-referrer">
+          <span class="user-name" id="userName"></span>
+          <button type="button" class="btn-chip ghost" id="logoutBtn">Keluar</button>
+        </div>
+      </div>
     </div>
   </header>
 
   <main>
     <!-- ============ Kendali pompa ============ -->
     <section class="card">
-      <h2>Kendali Pompa</h2>
-
-      <div class="mode-switch" role="tablist" aria-label="Mode kontrol">
-        <button type="button" class="mode-btn active" data-mode="auto">Otomatis (jadwal)</button>
-        <button type="button" class="mode-btn" data-mode="manual">Manual</button>
+      <div class="card-head">
+        <h2>Kendali Pompa</h2>
+        <span class="pill">mode</span>
       </div>
 
-      <div class="relay-box">
-        <button type="button" class="relay" id="relayBtn" aria-pressed="false">
-          <span class="relay-icon" id="relayIcon">&#9211;</span>
-          <span class="relay-text">
-            <strong id="relayText">MEMATIKAN</strong>
-            <small id="relaySource">menunggu laporan perangkat</small>
-          </span>
+      <div class="mode-switch" role="group" aria-label="Mode kontrol">
+        <button type="button" class="mode-btn active" data-mode="auto">
+          <span class="mode-ico" aria-hidden="true">&#9200;</span>
+          <span>Otomatis</span>
+        </button>
+        <button type="button" class="mode-btn" data-mode="manual">
+          <span class="mode-ico" aria-hidden="true">&#9995;</span>
+          <span>Manual</span>
         </button>
       </div>
 
       <dl class="stats">
-        <div>
+        <div class="stat">
           <dt>Waktu perangkat</dt>
           <dd id="lastSeen">&ndash;</dd>
         </div>
-        <div>
+        <div class="stat">
           <dt>Sinyal WiFi</dt>
           <dd id="rssi">&ndash;</dd>
         </div>
-        <div>
+        <div class="stat">
           <dt>Alamat IP</dt>
-          <dd id="ip">&ndash;</dd>
+          <dd id="ip" class="mono">&ndash;</dd>
         </div>
-        <div>
-          <dt>Sisa waktu pompa</dt>
+        <div class="stat">
+          <dt>Sisa pompa</dt>
           <dd id="sisa">&ndash;</dd>
         </div>
       </dl>
     </section>
 
-    <!-- ============ Jadwal ============ -->
-    <section class="card">
+    <!-- ============ Jadwal otomatis ============ -->
+    <section class="card" id="autoCard">
       <div class="card-head">
-        <h2>Jadwal Pompa Otomatis</h2>
-        <span class="hint" id="dirtyHint">tersimpan</span>
+        <h2>Jadwal Otomatis</h2>
+        <span class="pill">tetap</span>
       </div>
 
-      <div class="table-wrap">
-        <table class="jadwal">
-          <thead>
-            <tr>
-              <th>Slot</th>
-              <th>Aktif</th>
-              <th>Jam</th>
-              <th>Menit</th>
-            </tr>
-          </thead>
-          <tbody id="jadwalBody"></tbody>
-        </table>
+      <div class="jadwal-list" id="jadwalList"></div>
+    </section>
+
+    <!-- ============ Pompa manual ============ -->
+    <section class="card" id="manualCard" hidden>
+      <div class="card-head">
+        <h2>Pompa Manual</h2>
+        <span class="pill">manual</span>
       </div>
 
-      <div class="durasi-row">
-        <label for="durasi">Durasi pompa otomatis</label>
-        <div class="inline">
-          <input type="number" id="durasi" min="1" max="240" step="1">
-          <span>menit</span>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button type="button" class="btn primary" id="saveBtn">Simpan jadwal</button>
-        <button type="button" class="btn ghost" id="defaultBtn">Jadwal bawaan</button>
-      </div>
-      <p class="note">Jam mengikuti zona waktu perangkat (GMT+7 / WIB).</p>
+      <button type="button" class="relay" id="relayBtn" aria-pressed="false">
+        <span class="relay-icon" id="relayIcon" aria-hidden="true">&#9211;</span>
+        <span class="relay-text">
+          <strong id="relayText">MEMATIKAN</strong>
+          <small id="relaySource">menunggu laporan perangkat</small>
+        </span>
+      </button>
     </section>
   </main>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script src="app.js"></script>

@@ -1,17 +1,29 @@
 {
   "rules": {
-    ".read": true,
-    ".write": true,
+    ".read": false,
+    ".write": false,
+
     "konfigurasi": {
-      "mode": { ".validate": "newData.isString() && (newData.val() === 'auto' || newData.val() === 'manual')" },
-      "manual": { ".validate": "newData.isBoolean()" },
-      "durasiMenit": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 240" },
-      "jadwal": {
-        "$slot": {
-          "aktif": { ".validate": "newData.isBoolean()" },
-          "jam": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 23" },
-          "menit": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 59" }
-        }
+      ".read": true,
+      ".write": "auth != null && root.child('izin').child(auth.uid).val() === true",
+      "mode": {
+        ".validate": "newData.isString() && (newData.val() === 'auto' || newData.val() === 'manual')"
+      },
+      "manual": {
+        ".validate": "newData.isBoolean()"
+      }
+    },
+
+    "izin": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "perangkat": {
+      "$perangkat": {
+        ".read": true,
+        ".write": "auth != null && auth.admin === true"
       }
     }
   }
