@@ -1,0 +1,18 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "konfigurasi": {
+      "mode": { ".validate": "newData.isString() && (newData.val() === 'auto' || newData.val() === 'manual')" },
+      "manual": { ".validate": "newData.isBoolean()" },
+      "durasiMenit": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 240" },
+      "jadwal": {
+        "$slot": {
+          "aktif": { ".validate": "newData.isBoolean()" },
+          "jam": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 23" },
+          "menit": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 59" }
+        }
+      }
+    }
+  }
+}
