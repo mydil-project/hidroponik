@@ -27,6 +27,7 @@ const firebaseConfig = {
 // tambah akun: tulis di sini DAN di rules-rtdb.json (yaitu Rules Firebase Console)
 const AKUN_EDIT = [
   "aidilfebrian01@gmail.com",
+  "nelvimayasari13@gmail.com",
 ];
 
 const DB_URL = firebaseConfig.databaseURL;
