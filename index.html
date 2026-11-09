@@ -1,111 +1,275 @@
 <!DOCTYPE html>
 <html lang="id">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pompa Hydroponik</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HydroFlow | Smart Hydroponic</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="topbar-inner">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">&#9673;</span>
-        <div class="brand-text">
-          <h1>Pompa Hydroponik</h1>
-          <p class="sub" id="deviceMeta">ESP32 &middot; memuat konfigurasi...</p>
+
+<div class="container">
+
+    <!-- HEADER -->
+    <header>
+        <div class="brand">
+            <div class="logo">💧</div>
+            <div>
+                <h1>HydroFlow</h1>
+                <p>Smart Hydroponic Controller</p>
+            </div>
         </div>
-      </div>
-      <div class="badge" id="statusBadge">
-        <span class="dot" aria-hidden="true"></span>
-        <span id="statusBadgeText">Menghubungkan...</span>
-      </div>
-      <div class="auth">
-        <button type="button" class="btn-chip" id="loginBtn">Login</button>
-        <div class="user" id="userBox" hidden>
-          <img class="avatar" id="userPhoto" alt="" referrerpolicy="no-referrer">
-          <span class="user-name" id="userName"></span>
-          <button type="button" class="btn-chip ghost" id="logoutBtn">Keluar</button>
+
+        <div class="header-status">
+            <!-- STATUS WIFI PERANGKAT -->
+            <div class="wifi-status" id="wifiPill">
+                <span class="wifi-dot"></span>
+                <span id="wifiTeks">Offline</span>
+            </div>
+
+            <!-- AKUN -->
+            <button type="button" class="akun-tombol" id="akunMasuk">Masuk</button>
+            <button type="button" class="akun-avatar" id="akunAvatar" style="display: none;">
+                <img id="akunFoto" alt="" style="display: none;">
+                <span id="akunInisial"></span>
+            </button>
         </div>
-      </div>
+    </header>
+
+    <main class="dashboard">
+
+        <!-- STATUS POMPA & KONTROL -->
+        <section class="card">
+
+            <div class="card-title">
+                <h3>Status Perangkat</h3>
+            </div>
+
+            <div class="pump-box">
+
+                <div class="pump-icon">💧</div>
+
+                <div class="pump-info">
+                    <h2>Pompa Air</h2>
+                    <p id="pompaDeskripsi">Menunggu data perangkat...</p>
+                </div>
+
+                <span class="status-badge" id="badgeStatus">—</span>
+
+            </div>
+
+            <div class="stats">
+
+                <div class="stat-box">
+                    <p>Siklus</p>
+                    <h2 id="stSiklus">—</h2>
+                </div>
+
+                <div class="stat-box">
+                    <p>Status Pompa</p>
+                    <h2 id="stStatus">—</h2>
+                </div>
+
+            </div>
+
+            <div class="buttons">
+
+                <button class="btn-secondary" id="btnNyalakan">
+                    Nyalakan (Manual)
+                </button>
+
+                <button class="btn-secondary" id="btnOtomatis">
+                    Mode Otomatis
+                </button>
+
+            </div>
+
+        </section>
+
+        <!-- INFORMASI KONEKSI -->
+        <section class="card">
+
+            <div class="card-title">
+                <h3>Koneksi Perangkat</h3>
+            </div>
+
+            <div class="connection-icon">📶</div>
+
+            <div class="connection-status" id="connStatus">
+                <span class="connection-dot"></span>
+                <h2 id="connTeks">Periksa Perangkat</h2>
+            </div>
+
+            <p class="connection-description" id="connDeskripsi">
+                Menunggu data koneksi dari perangkat.
+            </p>
+
+            <div class="network-info">
+
+                <div class="network-item">
+                    <span>Nama Wi-Fi</span>
+                    <strong id="netNama">—</strong>
+                </div>
+
+                <div class="network-item">
+                    <span>IP Address</span>
+                    <strong id="netIp">—</strong>
+                </div>
+
+                <div class="network-item">
+                    <span>Perangkat</span>
+                    <strong id="netPerangkat">ESP32</strong>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- PENGATURAN JADWAL -->
+        <section class="card schedule">
+
+            <div class="card-title">
+                <h3>Pengaturan Jadwal Pompa</h3>
+            </div>
+
+            <div class="schedule-pairs">
+
+                <div class="schedule-group">
+                    <div class="schedule-group-title">
+                        <span class="label">JADWAL SIANG</span>
+                        <div class="jam-row">
+                            <input type="time" id="jSiangMulai" value="06:00">
+                            <span>–</span>
+                            <input type="time" id="jSiangSampai" value="18:00">
+                        </div>
+                    </div>
+
+                    <div class="input-grid">
+
+                        <div class="input-group">
+                            <label>Waktu Pompa Menyala (ON)</label>
+
+                            <div class="input-box">
+                                <input type="number" id="jSiangOn" value="5" min="1" max="720">
+                                <span>Menit</span>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Waktu Pompa Mati (OFF)</label>
+
+                            <div class="input-box">
+                                <input type="number" id="jSiangOff" value="10" min="1" max="720">
+                                <span>Menit</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <div class="schedule-group">
+                    <div class="schedule-group-title">
+                        <span class="label">JADWAL MALAM</span>
+                        <div class="jam-row">
+                            <input type="time" id="jMalamMulai" value="21:00">
+                            <span>–</span>
+                            <input type="time" id="jMalamSampai" value="03:00">
+                        </div>
+                    </div>
+
+                    <div class="input-grid">
+
+                        <div class="input-group">
+                            <label>Waktu Pompa Menyala (ON)</label>
+
+                            <div class="input-box">
+                                <input type="number" id="jMalamOn" value="5" min="1" max="720">
+                                <span>Menit</span>
+                            </div>
+                        </div>
+
+                        <div class="input-group">
+                            <label>Waktu Pompa Mati (OFF)</label>
+
+                            <div class="input-box">
+                                <input type="number" id="jMalamOff" value="175" min="1" max="720">
+                                <span>Menit</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TOMBOL JADWAL -->
+            <div class="buttons">
+
+                <button class="btn-primary" id="btnSimpan" style="display: none;">
+                    Simpan Pengaturan
+                </button>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <footer>
+        HydroFlow IoT Controller © 2026
+    </footer>
+
+</div>
+
+<!-- POPUP NOTIF -->
+<div class="popup" id="popupNotif">
+    <div class="popup-kartu popup-sukses" id="popupKartu">
+        <span class="popup-dot"></span>
+        <p id="popupTeks"></p>
     </div>
-  </header>
+</div>
 
-  <main>
-    <!-- ============ Kendali pompa ============ -->
-    <section class="card">
-      <div class="card-head">
-        <h2>Kendali Pompa</h2>
-        <span class="pill">mode</span>
-      </div>
-
-      <div class="mode-switch" role="group" aria-label="Mode kontrol">
-        <button type="button" class="mode-btn active" data-mode="auto">
-          <span class="mode-ico" aria-hidden="true">&#9200;</span>
-          <span>Otomatis</span>
-        </button>
-        <button type="button" class="mode-btn" data-mode="manual">
-          <span class="mode-ico" aria-hidden="true">&#9995;</span>
-          <span>Manual</span>
-        </button>
-      </div>
-
-      <dl class="stats">
-        <div class="stat">
-          <dt>Waktu perangkat</dt>
-          <dd id="lastSeen">&ndash;</dd>
+<!-- POPUP LOGIN AKUN -->
+<div class="popup" id="popupLogin">
+    <div class="popup-kartu popup-login">
+        <div class="card-title">
+            <h3 id="popupLoginJudul">Masuk</h3>
+            <span class="label">FIREBASE</span>
         </div>
-        <div class="stat">
-          <dt>Sinyal WiFi</dt>
-          <dd id="rssi">&ndash;</dd>
+
+        <div id="divLogin">
+            <button type="button" class="btn-google" id="btnGoogle">
+                <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true">
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.47 7.09-17.65z"/>
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+                </svg>
+                Masuk dengan Google
+            </button>
+
+            <div class="buttons">
+                <button type="button" class="btn-secondary" id="btnBatalLogin">Tutup</button>
+            </div>
         </div>
-        <div class="stat">
-          <dt>Alamat IP</dt>
-          <dd id="ip" class="mono">&ndash;</dd>
+
+        <div id="divKeluar" style="display: none;">
+            <div class="akun-profil">
+                <img id="keluarFoto" alt="" style="display: none;">
+                <span id="keluarInisial"></span>
+            </div>
+            <p class="akun-nama" id="keluarNama"></p>
+            <p class="akun-catatan" id="keluarCatatan"></p>
+
+            <div class="buttons kolom">
+                <button type="button" class="btn-secondary" id="btnKeluar">Keluar</button>
+                <button type="button" class="btn-primary" id="btnTutupLogin">Tutup</button>
+            </div>
         </div>
-        <div class="stat">
-          <dt>Jadwal pompa</dt>
-          <dd id="sisa">&ndash;</dd>
-        </div>
-      </dl>
-    </section>
+    </div>
+</div>
 
-    <!-- ============ Jadwal otomatis ============ -->
-    <section class="card" id="autoCard">
-      <div class="card-head">
-        <h2>Jadwal Otomatis</h2>
-        <span class="pill">tetap</span>
-      </div>
-
-      <div class="jadwal-list" id="jadwalList"></div>
-    </section>
-
-    <!-- ============ Pompa manual ============ -->
-    <section class="card" id="manualCard" hidden>
-      <div class="card-head">
-        <h2>Pompa Manual</h2>
-        <span class="pill">manual</span>
-      </div>
-
-      <button type="button" class="relay" id="relayBtn" aria-pressed="false">
-        <span class="relay-icon" id="relayIcon" aria-hidden="true">&#9211;</span>
-        <span class="relay-text">
-          <strong id="relayText">MEMATIKAN</strong>
-          <small id="relaySource">menunggu laporan perangkat</small>
-        </span>
-      </button>
-    </section>
-  </main>
-
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="firebase-config.js"></script>
-  <script src="app.js"></script>
+<script type="module" src="firebase.js"></script>
 </body>
-
 </html>
